@@ -1,0 +1,109 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  hosanna-rs-config — shared configuration infrastructure for hosanna-rs-*.
+#
+#  The crate exposes three traits (`ComponentConfig`, `ComponentBuilder`,
+#  and the loader they plug into) that every downstream crate implements to
+#  get uniform JSON + environment-variable loading with business-rule
+#  validation.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[package]
+name          = "hosanna-rs-config"
+version       = "0.1.0"
+edition       = "2024"
+rust-version  = "1.85"
+authors       = ["Aurelien Andre"]
+license       = "Apache-2.0"
+description   = "Shared configuration infrastructure: JSON + environment-variable loading, post-deserialisation validation, and typed component builders for the hosanna-rs-* family of crates."
+readme        = "README.md"
+repository    = "https://github.com/aartintelligent/hosanna-rs-config"
+homepage      = "https://github.com/aartintelligent/hosanna-rs-config"
+documentation = "https://docs.rs/hosanna-rs-config"
+keywords      = ["config", "configuration", "environment", "builder", "json"]
+categories    = ["config", "development-tools"]
+
+# Only ship what downstream users need: source, license, readme, changelog.
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+]
+
+# ─── Runtime dependencies ────────────────────────────────────────────────────
+
+[dependencies]
+# Layered configuration: JSON files + environment variables, merged with
+# a deterministic priority. `default-features = false` keeps the tree
+# lean — we only opt into the `json` source.
+config      = { version = "0.14", default-features = false, features = ["json"] }
+
+# Required by downstream config structs to derive `Deserialize`.
+serde       = { version = "1", features = ["derive"] }
+
+# Makes `ComponentBuilder::build` an async trait method on stable Rust.
+async-trait = "0.1"
+
+# Ergonomic, boilerplate-free error types for `ConfigError`.
+thiserror   = "2"
+
+# Appears in the public signature of `ComponentBuilder::build`: component
+# construction spans many unrelated failure modes (TLS, DNS, third-party
+# crates) and the top-level binary typically erases them into a single
+# chain anyway — so the crate commits to `anyhow::Error` as the contract.
+anyhow      = "1"
+
+# ─── Test-only dependencies ──────────────────────────────────────────────────
+
+[dev-dependencies]
+# Installs git hooks from `.cargo-husky/hooks/` into `.git/hooks/` the first
+# time a contributor runs `cargo test`. Kept Rust-native: no Python, no npm.
+cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
+
+# ─── Lints (codified at the crate level, honoured by every tool) ────────────
+#
+# Stable since Rust 1.74. Contributors get the same signal from
+# `cargo check` in their editor that the CI would give them, without
+# having to remember to pass CLI flags.
+
+[lints.rust]
+# `deny` rather than `forbid` because edition-2024 tests must wrap
+# `std::env::set_var` in `unsafe { … }`, and `forbid` cannot be locally
+# overridden with `#[allow(...)]`. Production code still gets a hard
+# compile error on any `unsafe` block — see the `cfg_attr` forbid in
+# `src/lib.rs` for the non-test invariant.
+unsafe_code       = "deny"
+# Every public item must be documented — the crate is small enough that
+# "I'll document it later" has no excuse.
+missing_docs      = "warn"
+# Anything reachable outside its module should either be `pub(crate)` or
+# genuinely public. Catches accidental `pub` leaks.
+unreachable_pub   = "warn"
+# Modern edition idioms (dyn traits, `Self` in impls, etc.).
+rust_2018_idioms  = { level = "warn", priority = -1 }
+
+[lints.rustdoc]
+# Broken doc links turn into deploy-time surprises; fail fast locally.
+broken_intra_doc_links   = "deny"
+private_intra_doc_links  = "deny"
+# Force the crate root to keep a `//!` banner.
+missing_crate_level_docs = "warn"
+
+[lints.clippy]
+# `all` = correctness + suspicious + style + complexity + perf — the
+# default "reasonable" bucket. Not `pedantic`: the signal-to-noise
+# ratio of pedantic on a small infrastructure crate is not worth the
+# `#[allow(...)]` spam.
+all   = { level = "warn", priority = -1 }
+# Flags cross-Cargo.toml issues (missing license, multiple versions
+# of the same dep in the tree, etc.).
+cargo = { level = "warn", priority = -1 }
+
+# ─── docs.rs build configuration ─────────────────────────────────────────────
+
+[package.metadata.docs.rs]
+# Build the full documentation — all features on — so nothing is hidden.
+all-features = true
+# Surface `#[cfg]` attributes in the generated HTML.
+rustdoc-args = ["--cfg", "docsrs"]

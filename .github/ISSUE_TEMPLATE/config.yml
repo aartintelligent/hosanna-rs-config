@@ -1,0 +1,13 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Issue chooser configuration
+#
+#  Forces contributors through one of the structured templates by disabling
+#  the "Open a blank issue" escape hatch.
+#
+#  The "Report a security vulnerability" entry is contributed automatically
+#  by GitHub because this repository has Private Vulnerability Reporting
+#  enabled (Settings → Code security and analysis). Adding a duplicate
+#  `contact_links:` entry here would show the same link twice, so we
+#  deliberately let GitHub own that line.
+# ─────────────────────────────────────────────────────────────────────────────
+blank_issues_enabled: false

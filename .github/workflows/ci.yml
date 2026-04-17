@@ -1,0 +1,96 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  CI — the same gates the local pre-commit hook runs, enforced on every PR
+#  and on every push to `main`.
+# ─────────────────────────────────────────────────────────────────────────────
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel in-flight runs for the same ref when a new push supersedes them.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets --locked -- -D warnings
+
+  docs:
+    name: rustdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # `--no-deps` keeps the build fast; `RUSTDOCFLAGS: -D warnings` (above)
+      # fails the job on broken intra-doc links or missing items.
+      - run: cargo doc --no-deps --locked
+
+  test:
+    name: test (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, "1.85"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.toolchain }}
+      # Env-var tests in `loader.rs` mutate process-wide state; run them
+      # serially so parallel scheduling cannot cross-contaminate prefixes.
+      - run: cargo test --locked -- --test-threads=1
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    # Coverage is informational — a broken upload must not block the whole
+    # pipeline (e.g. Codecov outage, missing token on a fork PR).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      # Source-based coverage via LLVM. `taiki-e/install-action` pulls the
+      # pre-built `cargo-llvm-cov` binary — no `cargo install` compile wait.
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate lcov report
+        run: cargo llvm-cov --workspace --locked --lcov --output-path lcov.info -- --test-threads=1
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: false

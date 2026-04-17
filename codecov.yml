@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Codecov configuration
+#
+#  Tunes the defaults to reduce noise: a ±1% jitter in cargo-llvm-cov's
+#  output shouldn't flip the status from green to red, and the PR comment
+#  should show the diff only when coverage actually moved.
+# ─────────────────────────────────────────────────────────────────────────────
+coverage:
+  status:
+    project:
+      default:
+        # Track the live trend instead of pinning a fixed target.
+        target: auto
+        # Tolerate a 1% drop before the status goes red — absorbs the
+        # measurement noise that LLVM-based coverage naturally produces.
+        threshold: 1%
+        informational: false
+    patch:
+      default:
+        # New code should at least be reasonably tested.
+        target: 80%
+        threshold: 0%
+        informational: false
+
+# PR comment: informational without being intrusive.
+comment:
+  layout: "diff, flags, files"
+  behavior: default
+  # Skip the comment entirely when the PR does not change coverage —
+  # keeps README / CI-only PRs quiet.
+  require_changes: true
+
+# The crate is lib-only with inline `#[cfg(test)]` modules; nothing to
+# hide from the coverage report.
+ignore: []
