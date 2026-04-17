@@ -15,7 +15,7 @@ use crate::{error::ConfigError, traits::ComponentConfig};
 /// returns a validated instance of its [`ComponentConfig`] struct.
 ///
 /// The loader is intentionally stateless: [`load`](Self::load) consumes
-/// `self`, so a loader is built, optionally customised, and then used
+/// `self`, so a loader is built, optionally customized, and then used
 /// exactly once.
 ///
 /// # Source priority
@@ -94,13 +94,13 @@ impl<C: ComponentConfig> ComponentConfigLoader<C> {
         self
     }
 
-    /// Assembles the configuration, deserialises it into `C`, and runs
+    /// Assembles the configuration, deserializes it into `C`, and runs
     /// [`ComponentConfig::validate`] on the result.
     ///
     /// # Errors
     ///
     /// Returns [`ConfigError::Load`] if the [`config`] crate cannot
-    /// build or deserialise the layered configuration (missing required
+    /// build or deserialize the layered configuration (missing required
     /// field, bad JSON, unparseable env value, …), and
     /// [`ConfigError::Validation`] if the struct's own `validate()`
     /// rejects the final value.
@@ -151,125 +151,6 @@ impl<C: ComponentConfig> Default for ComponentConfigLoader<C> {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 //
-// The tests mutate process-wide environment variables, so each case uses
-// a distinct prefix (`LOADER_*`) to avoid cross-contamination even under
-// the `--test-threads=1` discipline enforced in CI.
-
-#[cfg(test)]
-#[allow(unsafe_code)] // edition 2024 requires `unsafe` around `std::env::set_var`.
-mod tests {
-    use serde::Deserialize;
-
-    use super::ComponentConfigLoader;
-    use crate::traits::ComponentConfig;
-
-    #[derive(Debug, Deserialize, PartialEq, Eq)]
-    struct SimpleConfig {
-        url: String,
-        port: u16,
-    }
-
-    impl ComponentConfig for SimpleConfig {
-        fn env_prefix() -> &'static str {
-            "LOADER_SIMPLE"
-        }
-    }
-
-    #[test]
-    fn loads_from_env_variables() {
-        // SAFETY-ish: tests within this module serialise through distinct
-        // prefixes; see the module-level comment for rationale.
-        unsafe {
-            std::env::set_var("LOADER_SIMPLE__URL", "http://localhost");
-            std::env::set_var("LOADER_SIMPLE__PORT", "8080");
-        }
-
-        let config = ComponentConfigLoader::<SimpleConfig>::new()
-            .load()
-            .expect("should load from env");
-
-        assert_eq!(config.url, "http://localhost");
-        assert_eq!(config.port, 8080);
-    }
-
-    #[test]
-    fn missing_json_file_is_not_blocking() {
-        unsafe {
-            std::env::set_var("LOADER_MISSING__URL", "http://localhost");
-            std::env::set_var("LOADER_MISSING__PORT", "9090");
-        }
-
-        #[derive(Debug, Deserialize)]
-        struct MissingFileConfig {
-            url: String,
-            port: u16,
-        }
-
-        impl ComponentConfig for MissingFileConfig {
-            fn env_prefix() -> &'static str {
-                "LOADER_MISSING"
-            }
-        }
-
-        let config = ComponentConfigLoader::<MissingFileConfig>::new()
-            .with_config_file("this/path/does/not/exist")
-            .load()
-            .expect("missing json file must not fail the load");
-
-        assert_eq!(config.url, "http://localhost");
-        assert_eq!(config.port, 9090);
-    }
-
-    #[test]
-    fn env_prefix_can_be_overridden() {
-        unsafe {
-            std::env::set_var("LOADER_OVERRIDE__URL", "http://override");
-            std::env::set_var("LOADER_OVERRIDE__PORT", "1234");
-        }
-
-        let config = ComponentConfigLoader::<SimpleConfig>::new()
-            .with_env_prefix("LOADER_OVERRIDE")
-            .load()
-            .expect("should load with overridden prefix");
-
-        assert_eq!(config.url, "http://override");
-        assert_eq!(config.port, 1234);
-    }
-
-    #[test]
-    fn validation_error_is_propagated() {
-        #[derive(Debug, Deserialize)]
-        struct StrictConfig {
-            port: u16,
-        }
-
-        impl ComponentConfig for StrictConfig {
-            fn env_prefix() -> &'static str {
-                "LOADER_STRICT"
-            }
-
-            fn validate(&self) -> Result<(), String> {
-                if self.port < 1024 {
-                    return Err(format!("port {} is reserved", self.port));
-                }
-                Ok(())
-            }
-        }
-
-        unsafe {
-            std::env::set_var("LOADER_STRICT__PORT", "80");
-        }
-
-        let err = ComponentConfigLoader::<StrictConfig>::new()
-            .load()
-            .expect_err("validation must reject a reserved port");
-
-        match err {
-            crate::error::ConfigError::Validation { component, reason } => {
-                assert_eq!(component, "LOADER_STRICT");
-                assert!(reason.contains("80"));
-            }
-            other => panic!("expected Validation error, got {other:?}"),
-        }
-    }
-}
+// Behavioral tests live in `tests/loader.rs` (integration tests). That
+// keeps them out of the library coverage report and prevents test code
+// from dragging the crate's coverage percentage down.

@@ -37,7 +37,7 @@ include = [
 # Layered configuration: JSON files + environment variables, merged with
 # a deterministic priority. `default-features = false` keeps the tree
 # lean — we only opt into the `json` source.
-config      = { version = "0.14", default-features = false, features = ["json"] }
+config      = { version = "0.15", default-features = false, features = ["json"] }
 
 # Required by downstream config structs to derive `Deserialize`.
 serde       = { version = "1", features = ["derive"] }
@@ -59,9 +59,13 @@ anyhow      = "1"
 [dev-dependencies]
 # Installs git hooks from `.cargo-husky/hooks/` into `.git/hooks/` the first
 # time a contributor runs `cargo test`. Kept Rust-native: no Python, no npm.
-cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
+cargo-husky      = { version = "1", default-features = false, features = ["user-hooks"] }
 
-# ─── Lints (codified at the crate level, honoured by every tool) ────────────
+# Minimal executor used by the `ComponentBuilder` integration test — avoids
+# pulling in a full tokio runtime for a single `block_on` in test code.
+futures-executor = "0.3"
+
+# ─── Lints (codified at the crate level, honored by every tool) ────────────
 #
 # Stable since Rust 1.74. Contributors get the same signal from
 # `cargo check` in their editor that the CI would give them, without
