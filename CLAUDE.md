@@ -60,4 +60,36 @@ cargo test loads_from_env_variables -- --test-threads=1
 
 ## Commit messages
 
-Conventional Commits v1.0.0. The `feat` / `fix` / `perf` / `revert` types map to a Changie kind and require a fragment; `refactor` / `docs` / `test` / `chore` / `ci` / `build` / `style` do not. Breaking changes use `!` or a `BREAKING CHANGE:` footer.
+Commits follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/). The two layers are complementary, not redundant: the Conventional Commits prefix documents the git history, Changie documents the user-facing changelog. A commit can have both, one, or neither — the table below says which.
+
+Format:
+
+```
+<type>[optional scope][!]: <short summary>
+
+[optional body explaining the *why*]
+
+[optional footer(s), e.g. BREAKING CHANGE:, Refs: #123]
+```
+
+Mapping of Conventional Commit types to Changie kinds (kinds are declared in `.changie.yaml`):
+
+| CC type    | Changie kind | SemVer bump | Fragment required? |
+| ---------- | ------------ | ----------- | ------------------ |
+| `feat`     | `Added`      | minor       | ✅ yes             |
+| `fix`      | `Fixed`      | patch       | ✅ yes             |
+| `perf`     | `Fixed` or `Changed` depending on user impact | patch / major | ✅ yes |
+| `refactor` | (none)       | —           | ❌ no              |
+| `docs`     | (none)       | —           | ❌ no              |
+| `test`     | (none)       | —           | ❌ no              |
+| `chore`    | (none)       | —           | ❌ no              |
+| `ci`       | (none)       | —           | ❌ no              |
+| `build`    | (none)       | —           | ❌ no              |
+| `style`    | (none)       | —           | ❌ no              |
+| `revert`   | matches the reverted commit's kind | matches | ✅ yes if the original required one |
+
+Breaking changes — indicated either by the `!` suffix (`feat!:`, `fix!:`) or by a `BREAKING CHANGE:` footer — map to the Changie kind `Changed` (major) or `Removed` (major) depending on whether the API is altered or deleted. A `Deprecated` marker belongs on the commit that *adds* `#[deprecated]`, not on the later `Removed` one.
+
+The `Security` Changie kind has no direct Conventional Commits equivalent: use `fix(security):` or `fix!:` and pick `Security` when authoring the fragment. This is intentional — security fixes want a dedicated changelog bucket even when the git type is a generic `fix`.
+
+The `changelog-check` CI job enforces that any commit whose CC type appears with ✅ in the table above ships with a Changie fragment under `.changes/unreleased/*.yaml`. Use the `skip-changelog` PR label to bypass it for exceptional cases (e.g. a `fix:` that is purely internal and has no user-visible effect).
