@@ -38,28 +38,31 @@ use hosanna_rs_config::{ComponentConfig, ComponentConfigLoader};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-struct NatsConfig {
+struct DatabaseConfig {
     url: String,
-    stream: String,
+    max_connections: u32,
 }
 
-impl ComponentConfig for NatsConfig {
-    fn env_prefix() -> &'static str { "NATS" }
-    fn config_file() -> Option<&'static str> { Some("config/nats") }
+impl ComponentConfig for DatabaseConfig {
+    fn env_prefix() -> &'static str { "DATABASE" }
+    fn config_file() -> Option<&'static str> { Some("config/database") }
 
     fn validate(&self) -> Result<(), String> {
-        if !self.url.starts_with("nats://") {
-            return Err(format!("invalid NATS url: {}", self.url));
+        if !self.url.starts_with("postgres://") {
+            return Err(format!("invalid database url: {}", self.url));
+        }
+        if self.max_connections == 0 {
+            return Err("max_connections must be > 0".into());
         }
         Ok(())
     }
 }
 
-let cfg: NatsConfig = ComponentConfigLoader::<NatsConfig>::new().load()?;
+let cfg: DatabaseConfig = ComponentConfigLoader::<DatabaseConfig>::new().load()?;
 # Ok::<_, hosanna_rs_config::ConfigError>(())
 ```
 
-Environment variables use the double-underscore separator by default: `NATS__URL`, `NATS__STREAM`, `NATS__TLS__CERT_PATH`.
+Environment variables use the double-underscore separator by default: `DATABASE__URL`, `DATABASE__MAX_CONNECTIONS`, `DATABASE__TLS__CA_PATH`.
 
 ## Building a component
 
@@ -70,25 +73,67 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 # #[derive(Debug, Deserialize)]
-# struct NatsConfig { url: String }
-# impl ComponentConfig for NatsConfig {
-#     fn env_prefix() -> &'static str { "NATS" }
+# struct DatabaseConfig { url: String, max_connections: u32 }
+# impl ComponentConfig for DatabaseConfig {
+#     fn env_prefix() -> &'static str { "DATABASE" }
 # }
-pub trait NatsBus: Send + Sync {}
+pub trait DatabasePool: Send + Sync {}
 
-pub struct NatsClientBuilder;
+pub struct DatabasePoolBuilder;
 
 #[async_trait]
-impl ComponentBuilder for NatsClientBuilder {
-    type Output = Arc<dyn NatsBus>;
-    type Config = NatsConfig;
+impl ComponentBuilder for DatabasePoolBuilder {
+    type Output = Arc<dyn DatabasePool>;
+    type Config = DatabaseConfig;
 
-    async fn build(_config: NatsConfig) -> anyhow::Result<Self::Output> {
-        // async_nats::connect(&_config.url).await?; …
+    async fn build(_config: DatabaseConfig) -> anyhow::Result<Self::Output> {
+        // sqlx::postgres::PgPoolOptions::new()
+        //     .max_connections(_config.max_connections)
+        //     .connect(&_config.url).await?
+        // …
         # unimplemented!()
     }
 }
 ```
+
+## Pairing with `hosanna-rs-secret`
+
+Real configs carry secrets: database passwords, OAuth client secrets, API tokens. Pair this crate with [`hosanna-rs-secret`](https://crates.io/crates/hosanna-rs-secret) to keep those values out of logs and panic output without giving up on `Deserialize`.
+
+```toml
+[dependencies]
+hosanna-rs-config = "0.1"
+hosanna-rs-secret = "0.1"
+serde             = { version = "1", features = ["derive"] }
+```
+
+```rust,no_run
+use hosanna_rs_config::{ComponentConfig, ComponentConfigLoader};
+use hosanna_rs_secret::{ExposeSecret, SecretString};
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct DatabaseConfig {
+    url: String,
+    password: SecretString,
+}
+
+impl ComponentConfig for DatabaseConfig {
+    fn env_prefix() -> &'static str { "DATABASE" }
+}
+
+let cfg: DatabaseConfig = ComponentConfigLoader::<DatabaseConfig>::new().load()?;
+
+// Safe to format the whole struct — `password` renders as `SecretString([REDACTED])`.
+println!("loaded {cfg:?}");
+
+// The raw value is only accessible through the deliberately verbose gate.
+let raw: &str = cfg.password.expose_secret();
+# let _ = raw;
+# Ok::<_, hosanna_rs_config::ConfigError>(())
+```
+
+The two crates are independent — neither depends on the other — and compose through `serde`. `hosanna-rs-config` handles *where* the value comes from and *how* it is validated; `hosanna-rs-secret` handles *how it behaves in memory* once loaded (redacted `Display` / `Debug`, zeroised on drop, constant-time equality).
 
 ## Public surface
 
