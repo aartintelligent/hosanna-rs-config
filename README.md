@@ -7,13 +7,13 @@
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](#minimum-supported-rust-version)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Shared configuration infrastructure for the `hosanna-rs-*` family of crates.
+A small, opinionated configuration layer for Rust services.
 
-Every downstream component — NATS bus, database pool, HTTP client, … — declares a `Deserialize` struct, implements [`ComponentConfig`](https://docs.rs/hosanna-rs-config/latest/hosanna_rs_config/trait.ComponentConfig.html) on it, and gets uniform JSON + environment-variable loading, post-deserialisation validation, and a typed async builder interface for free.
+Declare a `Deserialize` struct for each component (HTTP server, database pool, message bus, feature-flag store — whatever you wire), implement [`ComponentConfig`](https://docs.rs/hosanna-rs-config/latest/hosanna_rs_config/trait.ComponentConfig.html) on it, and get uniform JSON + environment-variable loading, post-deserialisation validation, and a typed async builder interface for free. The same three-trait contract applies whether your binary has one component or thirty.
 
 ## Why
 
-Ad-hoc `std::env::var().parse()` everywhere is where configuration bugs come to live. This crate is the single, small layer that enforces the same loading discipline across every `hosanna-rs-*` crate:
+Ad-hoc `std::env::var().parse()` everywhere is where configuration bugs come to live. This crate is the single, small layer that enforces the same loading discipline across every component you configure:
 
 - **Two sources, one rule:** a committed JSON file for defaults, environment variables for the deployment override. Env always wins.
 - **Non-blocking file:** the JSON file is optional — a container image without `config/*.json` is a valid deployment.
